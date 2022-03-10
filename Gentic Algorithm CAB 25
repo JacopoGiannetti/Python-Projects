@@ -1,0 +1,291 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "e2354cbb",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "import random\n",
+    "import operator\n",
+    "from timeit import default_timer as timer"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "378daabe",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# 25 nodes - WHEN LOADING LARGER NETWORK COLUMN_NAMES MUST BE EXTENDED TO THE CORRECT NUMBER OF NODES\n",
+    "\n",
+    "column_names = [\"1\", \"2\", \"3\", \"4\", \"5\", \"6\", \"7\",\"8\",\"9\",\"10\",\"11\", \"12\", \"13\", \"14\",\n",
+    "                \"15\", \"16\", \"17\",\"18\",\"19\",\"20\",\"21\",\"22\",\"23\",\"24\",\"25\"]\n",
+    "cost = pd.read_csv(\"CAB25C.csv\", header=None, sep=';',decimal=\",\",  names=column_names)\n",
+    "cost.index += 1 "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "b7c44e93",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "flow_m = pd.read_csv(\"CAB25F.csv\", header=None, sep=';',decimal=\",\",  names=column_names)\n",
+    "flow_m.index += 1 "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "6920ee74",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def nodesandchildren(n):\n",
+    "    nodes = []\n",
+    "    c = []\n",
+    "    for i in range(1,n+1):\n",
+    "        nodes.append(i)\n",
+    "        c.append(0)\n",
+    "    return nodes,c"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "42bf92c7",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "nodes,embrion = nodesandchildren(25)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "72a63c0d",
+   "metadata": {},
+   "source": [
+    "## Total Network Cost for Random Solution"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "13dfbb13",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def TNC_Flow (cost,alpha,solution,nodes,flow):\n",
+    "    ccc = 0\n",
+    "    s = solution[1]\n",
+    "    hubs = solution[0]\n",
+    "        \n",
+    "    for node in nodes:\n",
+    "        nhub = s[node-1]\n",
+    "        for meta in nodes:\n",
+    "            flow = flow_m[str(node)][meta]\n",
+    "            mhub = s[meta-1]\n",
+    "            c = flow*(cost[str(node)][nhub] + alpha*cost[str(nhub)][mhub] + cost[str(mhub)][meta])\n",
+    "            ccc += c\n",
+    "            \n",
+    "    return ccc"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "308f5409",
+   "metadata": {},
+   "source": [
+    "## Random Solution Generator"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "382c9e71",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def random_solutions_noconstraint(p,n):\n",
+    "    \n",
+    "    # Hubs selection\n",
+    "    hubs = []\n",
+    "    while len(hubs) < p:\n",
+    "        x = random.randint(1, n)\n",
+    "        if x not in hubs:\n",
+    "            hubs.append(x)\n",
+    "            \n",
+    "    # Random Solution with incorrect hub position        \n",
+    "    solution = []\n",
+    "    while len(solution) < n:\n",
+    "        x = random.choice(hubs)\n",
+    "        solution.append(x)\n",
+    "              \n",
+    "    # Random Solution Hub position correction \n",
+    "    for hub in hubs:\n",
+    "        solution[hub-1] = hub\n",
+    "    \n",
+    "    return hubs,solution"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "f5039adb",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def solutions_noconstraint(p,n,n_sol):\n",
+    "    s = []\n",
+    "    while len(s)<n_sol:\n",
+    "        s.append(random_solutions_noconstraint(p,n))\n",
+    "    return s"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "c8686050",
+   "metadata": {},
+   "source": [
+    "## Mating Function (Generate 1 child from 2 parents)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "caea4389",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# MODIFICATION ARE NEEDED FOR DIFFERENT NUMBER OF HUBS\n",
+    "\n",
+    "def mate_2(a,b,p,n,embrion,nodes):\n",
+    "    c = embrion.copy()\n",
+    "    selected_genes = []\n",
+    "    dominant_g = []\n",
+    "    recessive_g = []\n",
+    "    \n",
+    "  #  Dominant Gene Selection\n",
+    "    while len(selected_genes)<2: # THIS NUMBER MUST BE GREATER THAN HALF THE NUMBER OF HUBS\n",
+    "        k = random.choice(a[0])\n",
+    "        if k not in selected_genes:\n",
+    "            selected_genes.append(k)\n",
+    "            dominant_g.append(k)\n",
+    "\n",
+    "    while len(selected_genes)<p:\n",
+    "        k = random.choice(b[0])\n",
+    "        if k not in selected_genes:\n",
+    "            selected_genes.append(k)\n",
+    "            recessive_g.append(k)\n",
+    "\n",
+    "    for i in range (0,n):\n",
+    "        if i+1 in selected_genes:\n",
+    "            c[i] = i+1\n",
+    "        else:\n",
+    "            p = random.randint(1,10)\n",
+    "            if p == 1:\n",
+    "                c[i] = random.choice(selected_genes)\n",
+    "            else:\n",
+    "                if a[1][i] in dominant_g:\n",
+    "                    c[i] = a[1][i]\n",
+    "                elif b[1][i] in recessive_g:\n",
+    "                    c[i] = b[1][i]\n",
+    "                else:\n",
+    "                    c[i] = random.choice(selected_genes)\n",
+    "\n",
+    "    return selected_genes,c"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "8c9dfe55",
+   "metadata": {},
+   "source": [
+    "## Genetic Algorithm"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "0dc236da",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def genetic_alg_5(cost,alpha,p,n,nodes,flow):\n",
+    "    start = timer()\n",
+    "    nodes,embrion = nodesandchildren(n)\n",
+    "    mutations = 0\n",
+    "    parents = solutions_noconstraint(p,n,100)\n",
+    "    for i in range (100):\n",
+    "        print(\"Generation\",i)\n",
+    "        new_parents = []\n",
+    "        for i in range(50):\n",
+    "            p1 = parents[random.randint(0,99)]\n",
+    "            p2 = parents[random.randint(0,99)]\n",
+    "            p1_score = TNC_Flow(cost,alpha,p1,nodes,flow)\n",
+    "            p2_score = TNC_Flow(cost,alpha,p2,nodes,flow)\n",
+    "            if p1_score <= p2_score:\n",
+    "                new_parents.append(p1)\n",
+    "                a = p1\n",
+    "                b = p2\n",
+    "            if p2_score < p1_score:\n",
+    "                new_parents.append(p2)\n",
+    "                a = p2\n",
+    "                b = p1\n",
+    "            #mating\n",
+    "            children = mate_2(a,b,p,n,embrion,nodes)\n",
+    "            children = children[0],children[1] \n",
+    "            new_parents.append(children)\n",
+    "            \n",
+    "        parents = new_parents\n",
+    "    best = parents[random.randint(0,99)]\n",
+    "    for i in parents:\n",
+    "        if TNC_Flow(cost,alpha,i,nodes,flow) < TNC_Flow(cost,alpha,best,nodes,flow):\n",
+    "            best = i\n",
+    "    tot_cost = TNC_Flow(cost,alpha,best,nodes,flow)/flow_m.sum().sum()\n",
+    "    end = timer() \n",
+    "    time = end-start    \n",
+    "            \n",
+    "    return best,tot_cost,time"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "aa4791de",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# EXECUTION FOR CAB 25, 0.2, 3 HUBS\n",
+    "genetic_alg_5(cost,0.2,3,25,nodes,flow_m) "
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.8.8"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
